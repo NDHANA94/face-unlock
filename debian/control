@@ -1,0 +1,47 @@
+Source: face-unlock
+Section: admin
+Priority: optional
+Maintainer: Nipun Dhananjaya <nipun.dhananjaya1994@gmail.com>
+Build-Depends: debhelper-compat (= 13),
+               meson,
+               ninja-build,
+               pkg-config,
+               g++,
+               bzip2,
+               python3,
+               python3-dev,
+               python3-pip,
+               python3-gi,
+               libpam0g-dev,
+               libinih-dev,
+               libevdev-dev
+Standards-Version: 4.7.0
+Rules-Requires-Root: no
+
+Package: face-unlock
+Architecture: amd64
+Depends: ${shlibs:Depends},
+         ${misc:Depends},
+         python3 (>= 3.14),
+         python3 (<< 3.15),
+         python3-numpy,
+         python3-opencv,
+         python3-gi,
+         gir1.2-gtk-4.0,
+         gir1.2-adw-1 (>= 1.6),
+         pkexec,
+         polkitd,
+         libpam-runtime
+Conflicts: howdy
+Replaces: howdy
+Description: Face authentication using RGB or infrared cameras
+ Face Unlock lets you sign in, unlock the screen and approve administrator
+ prompts (including sudo) by looking at an RGB or infrared camera.
+ Your password keeps working as a fallback at every prompt.
+ .
+ The package contains a GTK settings app to enroll faces and adjust
+ recognition, a PAM module, and a bundled recognition engine based on
+ Howdy and dlib. Face data is stored only on this computer.
+ .
+ Face recognition is a convenience feature and is less secure than a
+ strong password.

@@ -1,0 +1,9 @@
+# Author: WM Nipun Dhananjaya
+# Date:   24/09/2026
+#
+# Licensed under the MIT License. See the project LICENSE file for details.Name: Face Unlock (RGB/IR face recognition)
+Default: no
+Priority: 512
+Auth-Type: Primary
+Auth:
+	[success=end default=ignore]	pam_howdy.so

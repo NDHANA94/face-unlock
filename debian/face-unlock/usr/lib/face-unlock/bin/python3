@@ -1,0 +1,11 @@
+#!/bin/sh -p
+# Author: WM Nipun Dhananjaya
+# Date:   24/09/2026
+#
+# Licensed under the MIT License. See the project LICENSE file for details.
+#
+# Run the system Python with the bundled dlib on the module path.
+# Preserve PAM's effective UID when sudo has a different real UID.
+# This does not grant privileges to an unprivileged caller.
+# The PAM module starts the face engine through this wrapper.
+PYTHONPATH=/usr/lib/face-unlock/python exec /usr/bin/python3 "$@"

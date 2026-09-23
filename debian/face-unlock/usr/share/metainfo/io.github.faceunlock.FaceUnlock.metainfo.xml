@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Author: WM Nipun Dhananjaya
+  Date:   24/09/2026
+
+  Licensed under the MIT License. See the project LICENSE file for details.
+-->
+<component type="desktop-application">
+  <id>io.github.faceunlock.FaceUnlock</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>MIT</project_license>
+  <name>Face Unlock</name>
+  <summary>Sign in and unlock your computer with your face</summary>
+  <developer id="io.github.faceunlock">
+    <name>Nipun Dhananjaya</name>
+  </developer>
+  <description>
+    <p>
+      Face Unlock brings Windows Hello–style face authentication to Ubuntu. It uses
+      an RGB or infrared camera. An infrared illuminator can help in the dark. Face recognition is
+      a convenience: it is less secure than a strong password.
+    </p>
+    <ul>
+      <li>Unlock the login screen and lock screen by looking at the camera</li>
+      <li>Approve administrator prompts and sudo without typing your password</li>
+      <li>Your password always works as a fallback</li>
+      <li>Face data is stored only on this computer</li>
+    </ul>
+  </description>
+  <launchable type="desktop-id">io.github.faceunlock.FaceUnlock.desktop</launchable>
+  <content_rating type="oars-1.1"/>
+  <requires>
+    <display_length compare="ge">360</display_length>
+  </requires>
+  <supports>
+    <control>pointing</control>
+    <control>keyboard</control>
+    <control>touch</control>
+  </supports>
+  <releases>
+    <release version="1.1.0" date="2026-09-23">
+      <description><p>Light and dark glass themes, saved appearance settings, and animated face guides.</p></description>
+    </release>
+    <release version="1.0.0" date="2026-09-23">
+      <description>
+        <p>First release.</p>
+      </description>
+    </release>
+  </releases>
+</component>

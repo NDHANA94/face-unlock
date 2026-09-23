@@ -1,0 +1,15 @@
+# Author: WM Nipun Dhananjaya
+# Date:   24/09/2026
+#
+# Licensed under the MIT License. See the project LICENSE file for details.
+[Desktop Entry]
+Name=Face Unlock
+GenericName=Face Authentication
+Comment=Sign in and unlock your computer with your face
+Exec=face-unlock
+Icon=io.github.faceunlock.FaceUnlock
+Terminal=false
+Type=Application
+Categories=GTK;GNOME;Settings;Security;System;
+Keywords=face;hello;howdy;biometric;unlock;login;camera;infrared;IR;
+StartupNotify=true

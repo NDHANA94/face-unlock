@@ -1,0 +1,316 @@
+#!/usr/bin/python3 -I
+# Author: WM Nipun Dhananjaya
+# Date:   24/09/2026
+#
+# Licensed under the MIT License. See the project LICENSE file for details.
+"""Privileged helper for Face Unlock.
+
+Runs as root through pkexec. Every command acts on the account of the user
+who invoked pkexec (PKEXEC_UID) and never on an account named by the caller.
+Output is a single JSON object on stdout; the exit status is 0 on success.
+
+Commands:
+    authenticate          Verify the caller's password; succeeds when pkexec allowed it
+    list                  List the caller's face models (no authentication)
+    verify                Try to recognise the caller (no authentication)
+    enroll LABEL          Scan the caller's face and store a new model
+    remove ID             Delete one of the caller's face models
+    clear                 Delete all of the caller's face models
+    enable | disable      Turn face authentication on or off system-wide
+    configure KEY=VALUE…  Change whitelisted engine settings
+"""
+
+import json
+import os
+import pwd
+import re
+import stat
+import subprocess
+import sys
+import syslog
+import tempfile
+
+ENGINE_DIR = "/usr/lib/face-unlock/howdy"
+ENGINE_PYTHON = "/usr/lib/face-unlock/bin/python3"
+CONFIG_FILE = os.environ.get("FACE_UNLOCK_CONFIG", "/etc/face-unlock/config.ini")
+MODELS_DIR = "/var/lib/face-unlock/models"
+PAM_PROFILE = "face-unlock"
+MAX_MODELS = 8
+CLEAN_ENV = {"PATH": "/usr/sbin:/usr/bin:/sbin:/bin", "LANG": "C.UTF-8"}
+
+# Engine messages mapped to what we show people.
+ENROLL_ERRORS = [
+    ("only black frames", "The camera only saw black frames. Check the lighting, privacy shutter, or IR illuminator."),
+    ("too dark", "The picture is too dark. Move a little closer to the camera."),
+    ("No face detected", "No face was found. Look straight at the camera and try again."),
+    ("Multiple faces", "More than one face is in view. Make sure only you are in front of the camera."),
+    ("not found", "The camera could not be opened. Check the camera setting."),
+]
+VERIFY_RESULTS = {
+    0: (True, "Face recognized."),
+    10: (False, "No face model is enrolled for this account."),
+    11: (False, "Your face was not recognized before the time ran out."),
+    12: (False, "Face check was aborted."),
+    13: (False, "The picture is too dark. Move a little closer to the camera."),
+    14: (False, "The camera could not be opened. Check the camera setting."),
+}
+
+
+class HelperError(Exception):
+    pass
+
+
+# --- validation -------------------------------------------------------------
+
+def _bool(value):
+    if value not in ("true", "false"):
+        raise HelperError("expected true or false")
+    return value
+
+
+def _number(kind, low, high):
+    def check(value):
+        try:
+            number = kind(value)
+        except ValueError:
+            raise HelperError(f"expected a number between {low} and {high}")
+        if not low <= number <= high:
+            raise HelperError(f"expected a number between {low} and {high}")
+        return str(number)
+    return check
+
+
+def _device(value):
+    if not re.fullmatch(r"/dev/(video\d+|v4l/by-(id|path)/[A-Za-z0-9._:+-]+)", value):
+        raise HelperError("not a video device path")
+    real = os.path.realpath(value)
+    if not re.fullmatch(r"/dev/video\d+", real) or not stat.S_ISCHR(os.stat(real).st_mode):
+        raise HelperError("not a video device")
+    return value
+
+
+SETTINGS = {
+    "video.certainty": _number(float, 1.0, 6.0),
+    "video.timeout": _number(int, 1, 15),
+    "video.dark_threshold": _number(int, 10, 100),
+    "video.device_path": _device,
+    "core.detection_notice": _bool,
+    "core.no_confirmation": _bool,
+    "core.abort_if_lid_closed": _bool,
+    "core.abort_if_ssh": _bool,
+}
+
+
+def calling_user(argv):
+    """Resolve the account to act on. Only root may pick one explicitly."""
+    pkexec_uid = os.environ.get("PKEXEC_UID")
+    if pkexec_uid is not None:
+        entry = pwd.getpwuid(int(pkexec_uid))
+    elif os.getuid() == 0 and len(argv) >= 2 and argv[0] == "--user":
+        entry = pwd.getpwnam(argv[1])
+        del argv[:2]
+    else:
+        raise HelperError("run through pkexec, or as root with --user NAME")
+    if entry.pw_uid == 0:
+        raise HelperError("face models cannot be set up for root")
+    return entry.pw_name
+
+
+# --- engine -----------------------------------------------------------------
+
+def run_engine(args, timeout):
+    return subprocess.run(
+        [ENGINE_PYTHON, *args], cwd=ENGINE_DIR, env=CLEAN_ENV,
+        capture_output=True, text=True, timeout=timeout, check=False)
+
+
+def howdy_cli(user, *args, timeout=120):
+    return run_engine([f"{ENGINE_DIR}/cli.py", "-U", user, "-y", "--plain", *args], timeout)
+
+
+def read_models(user):
+    try:
+        with open(os.path.join(MODELS_DIR, f"{user}.dat")) as f:
+            models = json.load(f)
+    except FileNotFoundError:
+        return []
+    return [{"id": m["id"], "label": m["label"], "time": m["time"]} for m in models]
+
+
+def ini_set(text, section, key, value):
+    """Set key=value inside [section] while keeping comments and layout."""
+    lines = text.splitlines(keepends=True)
+    current = None
+    header_index = None
+    for i, line in enumerate(lines):
+        match = re.match(r"\s*\[([^\]]+)\]", line)
+        if match:
+            current = match.group(1).strip()
+            if current == section:
+                header_index = i
+            continue
+        if current == section and re.match(rf"\s*{re.escape(key)}\s*=", line):
+            lines[i] = f"{key} = {value}\n"
+            return "".join(lines)
+    if header_index is None:
+        suffix = "" if not lines or lines[-1].endswith("\n") else "\n"
+        return "".join(lines) + f"{suffix}\n[{section}]\n{key} = {value}\n"
+    lines.insert(header_index + 1, f"{key} = {value}\n")
+    return "".join(lines)
+
+
+def write_atomic(path, text):
+    directory = os.path.dirname(path)
+    fd, tmp = tempfile.mkstemp(dir=directory, prefix=".config.")
+    try:
+        with os.fdopen(fd, "w") as f:
+            f.write(text)
+        os.chmod(tmp, 0o644)
+        os.replace(tmp, path)
+    except BaseException:
+        os.unlink(tmp)
+        raise
+
+
+# --- commands ---------------------------------------------------------------
+
+def cmd_list(user, args):
+    return {"ok": True, "models": read_models(user)}
+
+
+def cmd_authenticate(user, args):
+    """Confirm the caller is the account named by pkexec.
+
+    The polkit prompt has already proved they can authenticate as themselves;
+    this command exists solely to gate the GUI behind that check.
+    """
+    syslog.syslog(syslog.LOG_NOTICE, f"face-unlock GUI opened by {user}")
+    return {"ok": True, "user": user}
+
+
+def cmd_verify(user, args):
+    if not read_models(user):
+        return {"ok": False, "code": 10, "message": VERIFY_RESULTS[10][1]}
+    result = run_engine([f"{ENGINE_DIR}/compare.py", user], timeout=60)
+    ok, message = VERIFY_RESULTS.get(
+        result.returncode, (False, f"Face check failed (error {result.returncode})."))
+    return {"ok": ok, "code": result.returncode, "message": message}
+
+
+def cmd_enroll(user, args):
+    if len(args) != 1:
+        raise HelperError("usage: enroll LABEL")
+    label = args[0].strip()
+    if not 1 <= len(label) <= 24 or not label.isprintable() or "," in label:
+        raise HelperError("the name must be 1-24 characters with no commas")
+    if len(read_models(user)) >= MAX_MODELS:
+        raise HelperError(f"you already have {MAX_MODELS} face models; remove one first")
+
+    result = howdy_cli(user, "add", label)
+    output = result.stdout + result.stderr
+    if result.returncode != 0:
+        if result.returncode == 14:
+            return {"ok": False, "message": VERIFY_RESULTS[14][1]}
+        for needle, message in ENROLL_ERRORS:
+            if needle in output:
+                return {"ok": False, "message": message}
+        return {"ok": False, "message": "The face scan failed.", "detail": output.strip()[-500:]}
+    syslog.syslog(syslog.LOG_NOTICE, f"face model '{label}' added for {user}")
+    return {"ok": True, "models": read_models(user)}
+
+
+def cmd_remove(user, args):
+    if len(args) != 1 or not args[0].isdigit():
+        raise HelperError("usage: remove ID")
+    if not any(str(m["id"]) == args[0] for m in read_models(user)):
+        raise HelperError("no face model with that ID")
+    result = howdy_cli(user, "remove", args[0], timeout=30)
+    if result.returncode != 0:
+        raise HelperError(result.stdout.strip() or "could not remove the face model")
+    syslog.syslog(syslog.LOG_NOTICE, f"face model {args[0]} removed for {user}")
+    return {"ok": True, "models": read_models(user)}
+
+
+def cmd_clear(user, args):
+    path = os.path.join(MODELS_DIR, f"{user}.dat")
+    if os.path.exists(path):
+        os.remove(path)
+    syslog.syslog(syslog.LOG_NOTICE, f"all face models removed for {user}")
+    return {"ok": True, "models": []}
+
+
+def _pam_auth_update(flag):
+    env = dict(CLEAN_ENV, DEBIAN_FRONTEND="noninteractive")
+    result = subprocess.run(["pam-auth-update", flag, PAM_PROFILE], env=env,
+                            capture_output=True, text=True, check=False)
+    if result.returncode != 0:
+        raise HelperError((result.stderr or result.stdout).strip() or "pam-auth-update failed")
+
+
+def cmd_enable(user, args):
+    probe = run_engine(["-c", "import dlib, cv2, numpy"], timeout=30)
+    if probe.returncode != 0:
+        raise HelperError("the face engine is not working: " + probe.stderr.strip()[-300:])
+    _pam_auth_update("--enable")
+    syslog.syslog(syslog.LOG_NOTICE, f"face authentication enabled by {user}")
+    return {"ok": True, "enabled": True}
+
+
+def cmd_disable(user, args):
+    _pam_auth_update("--disable")
+    syslog.syslog(syslog.LOG_NOTICE, f"face authentication disabled by {user}")
+    return {"ok": True, "enabled": False}
+
+
+def cmd_configure(user, args):
+    if not args:
+        raise HelperError("usage: configure KEY=VALUE...")
+    changes = []
+    for arg in args:
+        key, sep, value = arg.partition("=")
+        if not sep or key not in SETTINGS:
+            raise HelperError(f"setting not allowed: {key}")
+        try:
+            changes.append((key, SETTINGS[key](value)))
+        except (HelperError, OSError) as err:
+            raise HelperError(f"{key}: {err}")
+    with open(CONFIG_FILE) as f:
+        text = f.read()
+    for key, value in changes:
+        section, name = key.split(".", 1)
+        text = ini_set(text, section, name, value)
+    write_atomic(CONFIG_FILE, text)
+    syslog.syslog(syslog.LOG_NOTICE, f"settings changed by {user}: " + ", ".join(k for k, _ in changes))
+    return {"ok": True}
+
+
+COMMANDS = {
+    "authenticate": cmd_authenticate,
+    "list": cmd_list, "verify": cmd_verify, "enroll": cmd_enroll,
+    "remove": cmd_remove, "clear": cmd_clear, "enable": cmd_enable,
+    "disable": cmd_disable, "configure": cmd_configure,
+}
+
+
+def main(argv):
+    os.umask(0o077)
+    syslog.openlog("face-unlock-helper", syslog.LOG_PID, syslog.LOG_AUTH)
+    try:
+        if os.geteuid() != 0:
+            raise HelperError("must run as root (through pkexec)")
+        user = calling_user(argv)
+        if not argv or argv[0] not in COMMANDS:
+            raise HelperError("unknown command; see the file header for usage")
+        result = COMMANDS[argv[0]](user, argv[1:])
+    except HelperError as err:
+        result = {"ok": False, "error": str(err)}
+    except subprocess.TimeoutExpired:
+        result = {"ok": False, "error": "the face engine took too long to respond"}
+    except (OSError, KeyError, ValueError) as err:
+        result = {"ok": False, "error": str(err)}
+    print(json.dumps(result))
+    return 0 if result.get("ok") else 1
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

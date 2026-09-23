@@ -1,0 +1,92 @@
+#!/usr/bin/make -f
+# Builds the bundled Howdy engine from the pinned tarball in vendor/, adds the
+# prebuilt dlib wheel and face models, then installs the Face Unlock app.
+
+HOWDY_COMMIT := d3ab99382f88f043d15f15c1450ab69433892a1c
+MULTIARCH    := $(shell dpkg-architecture -qDEB_HOST_MULTIARCH)
+PKG          := $(CURDIR)/debian/face-unlock
+ENGINE       := /usr/lib/face-unlock
+DATA         := /usr/share/face-unlock
+HOWDY        := debian/build/howdy-$(HOWDY_COMMIT)
+MODELS       := dlib_face_recognition_resnet_model_v1 shape_predictor_5_face_landmarks mmod_human_face_detector
+
+%:
+	dh $@
+
+override_dh_auto_clean:
+	rm -rf debian/build
+	find src tests -name __pycache__ -prune -exec rm -rf {} +
+
+override_dh_auto_configure:
+	mkdir -p debian/build
+	tar -xzf vendor/howdy-$(HOWDY_COMMIT).tar.gz -C debian/build
+	patch -d $(HOWDY) -p1 < packaging/patches/howdy-error-status.patch
+	patch -d $(HOWDY) -p1 < packaging/patches/howdy-camera-preflight.patch
+	# The PAM module must start the engine through our wrapper so the bundled
+	# dlib is importable; meson itself keeps using the system python.
+	sed -i "s|^pam_module_conf_data = configuration_data(paths_dict)$$|&\npam_module_conf_data.set('python_path', '$(ENGINE)/bin/python3')|" \
+		$(HOWDY)/howdy/src/meson.build
+	grep -q "'$(ENGINE)/bin/python3'" $(HOWDY)/howdy/src/meson.build
+	cd $(HOWDY) && meson setup build \
+		--prefix=/usr \
+		--libdir=lib/$(MULTIARCH) \
+		--buildtype=release \
+		-Dconfig_dir=/etc/face-unlock \
+		-Duser_models_dir=/var/lib/face-unlock/models \
+		-Ddlib_data_dir=$(DATA)/dlib-data \
+		-Dlog_path=/var/log/face-unlock \
+		-Dpy_sources_dir=$(ENGINE) \
+		-Dpam_dir=/usr/lib/$(MULTIARCH)/security \
+		-Dpython_path=/usr/bin/python3
+
+override_dh_auto_build:
+	meson compile -C $(HOWDY)/build
+
+override_dh_auto_test:
+	PYTHONPATH=src python3 -m unittest discover -s tests -v
+
+override_dh_auto_install:
+	DESTDIR=$(PKG) meson install -C $(HOWDY)/build --no-rebuild
+	# Drop the parts of Howdy we replace: its CLI launcher, GTK UI, shell
+	# completion and the model download script (models are bundled).
+	rm -rf $(PKG)/usr/bin $(PKG)/usr/share/howdy $(PKG)/usr/share/howdy-gtk \
+		$(PKG)$(ENGINE)/howdy-gtk $(PKG)/usr/lib/$(MULTIARCH)/howdy-gtk \
+		$(PKG)/usr/share/bash-completion $(PKG)/var \
+		$(PKG)$(DATA)/dlib-data/install.sh $(PKG)$(DATA)/dlib-data/Readme.md
+	# Ship the default config as a template; postinst copies it to /etc.
+	install -D -m 644 $(HOWDY)/howdy/src/config.ini $(PKG)$(DATA)/config.ini.default
+	install -d $(PKG)/etc/face-unlock
+	sed -i -e 's/^detection_notice = .*/detection_notice = true/' \
+		-e 's/^suppress_unknown = .*/suppress_unknown = true/' \
+		$(PKG)$(DATA)/config.ini.default
+
+	# Bundled dlib and face models
+	python3 -m pip install --no-index --no-deps --no-compile --disable-pip-version-check \
+		--target $(PKG)$(ENGINE)/python vendor/wheels/dlib-*.whl
+	rm -rf $(PKG)$(ENGINE)/python/bin
+	for model in $(MODELS); do \
+		bzip2 -dc vendor/$$model.dat.bz2 > $(PKG)$(DATA)/dlib-data/$$model.dat; \
+	done
+
+	# Face Unlock app, helper and system integration
+	install -D -m 755 src/face-unlock $(PKG)/usr/bin/face-unlock
+	install -d $(PKG)$(DATA)/face_unlock
+	install -m 644 src/face_unlock/*.py $(PKG)$(DATA)/face_unlock/
+	install -D -m 755 src/helper/face-unlock-helper $(PKG)/usr/libexec/face-unlock/face-unlock-helper
+	install -D -m 755 src/helper/python3 $(PKG)$(ENGINE)/bin/python3
+	install -D -m 644 data/io.github.faceunlock.policy \
+		$(PKG)/usr/share/polkit-1/actions/io.github.faceunlock.policy
+	install -D -m 644 data/pam-config $(PKG)/usr/share/pam-configs/face-unlock
+	install -D -m 644 data/io.github.faceunlock.FaceUnlock.desktop \
+		$(PKG)/usr/share/applications/io.github.faceunlock.FaceUnlock.desktop
+	install -D -m 644 data/io.github.faceunlock.FaceUnlock.metainfo.xml \
+		$(PKG)/usr/share/metainfo/io.github.faceunlock.FaceUnlock.metainfo.xml
+	install -D -m 644 data/icons/io.github.faceunlock.FaceUnlock.svg \
+		$(PKG)/usr/share/icons/hicolor/scalable/apps/io.github.faceunlock.FaceUnlock.svg
+	install -D -m 644 data/icons/io.github.faceunlock.FaceUnlock-symbolic.svg \
+		$(PKG)/usr/share/icons/hicolor/symbolic/apps/io.github.faceunlock.FaceUnlock-symbolic.svg
+	install -D -m 644 LICENSE $(PKG)/usr/share/doc/face-unlock/LICENSE
+
+# The bundled dlib is a private copy used only by the engine
+override_dh_shlibdeps:
+	dh_shlibdeps -l$(PKG)$(ENGINE)/python

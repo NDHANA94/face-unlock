@@ -1,0 +1,58 @@
+face-unlock (1.2.2) resolute; urgency=medium
+
+  * Quit cleanly when the user closes the main window, instead of leaving
+    the process running until Ctrl+C.
+
+ -- Nipun Dhananjaya <nipun.dhananjaya1994@gmail.com>  Thu, 24 Sep 2026 02:25:00 +0300
+
+face-unlock (1.2.1) resolute; urgency=medium
+
+  * Hold the main loop while the startup password prompt is pending, so the
+    GTK application no longer exits before pkexec returns.
+
+ -- Nipun Dhananjaya <nipun.dhananjaya1994@gmail.com>  Thu, 24 Sep 2026 02:10:00 +0300
+
+face-unlock (1.2.0) resolute; urgency=medium
+
+  * Require the user's password every time the Face Unlock app is opened
+    through a dedicated polkit action (auth_self_keep).
+  * Replace the glass dialog surface with solid, opaque backgrounds so popup
+    contents and dialog text are always legible in both light and dark themes.
+
+ -- Nipun Dhananjaya <nipun.dhananjaya1994@gmail.com>  Thu, 24 Sep 2026 01:05:00 +0300
+
+face-unlock (1.1.1) resolute; urgency=medium
+
+  * Remove overlapping polkit rules that prompted for authentication at startup.
+  * Skip face authentication quietly when no camera is configured or available.
+
+ -- Nipun Dhananjaya <nipun.dhananjaya1994@gmail.com>  Thu, 24 Sep 2026 00:30:00 +0300
+
+face-unlock (1.1.0) resolute; urgency=medium
+
+  * Introduce light and dark glass themes with a remembered appearance choice.
+  * Refresh setup, dashboard and enrollment with animated face guides.
+  * Respect reduced-motion preferences and stop hidden scan animations.
+
+ -- Nipun Dhananjaya <nipun.dhananjaya1994@gmail.com>  Thu, 24 Sep 2026 00:15:00 +0300
+
+face-unlock (1.0.2) resolute; urgency=medium
+
+  * Preserve effective PAM credentials when launching the engine through sudo.
+  * Format unknown PAM engine exit codes without string pointer arithmetic.
+
+ -- Nipun Dhananjaya <nipun.dhananjaya1994@gmail.com>  Wed, 23 Sep 2026 23:45:00 +0300
+
+face-unlock (1.0.1) resolute; urgency=medium
+
+  * Save the selected camera before every enrollment entry point.
+  * Report missing cameras and show enrollment engine error details.
+
+ -- Nipun Dhananjaya <nipun.dhananjaya1994@gmail.com>  Wed, 23 Sep 2026 23:15:00 +0300
+
+face-unlock (1.0.0) resolute; urgency=medium
+
+  * First release: GTK app, privileged helper, PAM integration, and a
+    bundled Howdy 3 engine (d3ab993) with dlib 20.0.1 and face models.
+
+ -- Nipun Dhananjaya <nipun.dhananjaya1994@gmail.com>  Wed, 23 Sep 2026 22:00:00 +0530

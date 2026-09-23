@@ -1,0 +1,13 @@
+Package: face-unlock-dbgsym
+Package-Type: ddeb
+Source: face-unlock
+Version: 1.2.2
+Auto-Built-Package: debug-symbols
+Architecture: amd64
+Maintainer: Nipun Dhananjaya <nipun.dhananjaya1994@gmail.com>
+Installed-Size: 334
+Depends: face-unlock (= 1.2.2)
+Section: debug
+Priority: optional
+Description: debug symbols for face-unlock
+Build-Ids: 24e25a6f88d7df7cfe9f98421a74f41dd4ab0b60

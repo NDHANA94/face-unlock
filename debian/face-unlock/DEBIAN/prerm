@@ -1,0 +1,11 @@
+#!/bin/sh
+set -e
+
+# Take the PAM module out of the auth stack before its files disappear.
+if [ "$1" = "remove" ] || [ "$1" = "deconfigure" ]; then
+    pam-auth-update --package --remove face-unlock
+fi
+
+
+
+exit 0

@@ -1,0 +1,10 @@
+#!/bin/sh
+set -e
+
+if [ "$1" = "purge" ]; then
+    rm -rf /etc/face-unlock /var/lib/face-unlock /var/log/face-unlock
+fi
+
+#DEBHELPER#
+
+exit 0

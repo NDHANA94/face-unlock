@@ -1,0 +1,3 @@
+extend-diff-ignore = "^(vendor|dist|legacy)/"
+tar-ignore = vendor/wheels
+tar-ignore = dist

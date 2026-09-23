@@ -1,0 +1,126 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Author: WM Nipun Dhananjaya
+  Date:   24/09/2026
+
+  Licensed under the MIT License. See the project LICENSE file for details.
+-->
+<!DOCTYPE policyconfig PUBLIC "-//freedesktop//DTD polkit Policy Configuration 1.0//EN"
+"http://www.freedesktop.org/software/polkit/policyconfig-1.dtd">
+<policyconfig>
+  <vendor>Face Unlock</vendor>
+  <icon_name>io.github.faceunlock.FaceUnlock</icon_name>
+
+  <!-- Reading your own face model list: no password for the active session. -->
+  <action id="io.github.faceunlock.list">
+    <description>List your face models</description>
+    <message>Authentication is required to list your face models</message>
+    <defaults>
+      <allow_any>no</allow_any>
+      <allow_inactive>no</allow_inactive>
+      <allow_active>yes</allow_active>
+    </defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">/usr/libexec/face-unlock/face-unlock-helper</annotate>
+    <annotate key="org.freedesktop.policykit.exec.argv1">list</annotate>
+  </action>
+
+  <!-- Testing recognition against your own models: no password. -->
+  <action id="io.github.faceunlock.verify">
+    <description>Test face recognition</description>
+    <message>Authentication is required to test face recognition</message>
+    <defaults>
+      <allow_any>no</allow_any>
+      <allow_inactive>no</allow_inactive>
+      <allow_active>yes</allow_active>
+    </defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">/usr/libexec/face-unlock/face-unlock-helper</annotate>
+    <annotate key="org.freedesktop.policykit.exec.argv1">verify</annotate>
+  </action>
+
+  <!-- Each command has a unique match; no catch-all may shadow list/verify. -->
+  <action id="io.github.faceunlock.configure">
+    <description>Manage Face Unlock</description>
+    <message>Authentication is required to change Face Unlock settings</message>
+    <defaults>
+      <allow_any>no</allow_any>
+      <allow_inactive>no</allow_inactive>
+      <allow_active>auth_admin_keep</allow_active>
+    </defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">/usr/libexec/face-unlock/face-unlock-helper</annotate>
+    <annotate key="org.freedesktop.policykit.exec.argv1">configure</annotate>
+  </action>
+
+  <action id="io.github.faceunlock.enroll">
+    <description>Manage Face Unlock</description>
+    <message>Authentication is required to change Face Unlock settings</message>
+    <defaults>
+      <allow_any>no</allow_any>
+      <allow_inactive>no</allow_inactive>
+      <allow_active>auth_admin_keep</allow_active>
+    </defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">/usr/libexec/face-unlock/face-unlock-helper</annotate>
+    <annotate key="org.freedesktop.policykit.exec.argv1">enroll</annotate>
+  </action>
+
+  <action id="io.github.faceunlock.remove">
+    <description>Manage Face Unlock</description>
+    <message>Authentication is required to change Face Unlock settings</message>
+    <defaults>
+      <allow_any>no</allow_any>
+      <allow_inactive>no</allow_inactive>
+      <allow_active>auth_admin_keep</allow_active>
+    </defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">/usr/libexec/face-unlock/face-unlock-helper</annotate>
+    <annotate key="org.freedesktop.policykit.exec.argv1">remove</annotate>
+  </action>
+
+  <action id="io.github.faceunlock.clear">
+    <description>Manage Face Unlock</description>
+    <message>Authentication is required to change Face Unlock settings</message>
+    <defaults>
+      <allow_any>no</allow_any>
+      <allow_inactive>no</allow_inactive>
+      <allow_active>auth_admin_keep</allow_active>
+    </defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">/usr/libexec/face-unlock/face-unlock-helper</annotate>
+    <annotate key="org.freedesktop.policykit.exec.argv1">clear</annotate>
+  </action>
+
+  <action id="io.github.faceunlock.enable">
+    <description>Manage Face Unlock</description>
+    <message>Authentication is required to change Face Unlock settings</message>
+    <defaults>
+      <allow_any>no</allow_any>
+      <allow_inactive>no</allow_inactive>
+      <allow_active>auth_admin_keep</allow_active>
+    </defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">/usr/libexec/face-unlock/face-unlock-helper</annotate>
+    <annotate key="org.freedesktop.policykit.exec.argv1">enable</annotate>
+  </action>
+
+  <action id="io.github.faceunlock.disable">
+    <description>Manage Face Unlock</description>
+    <message>Authentication is required to change Face Unlock settings</message>
+    <defaults>
+      <allow_any>no</allow_any>
+      <allow_inactive>no</allow_inactive>
+      <allow_active>auth_admin_keep</allow_active>
+    </defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">/usr/libexec/face-unlock/face-unlock-helper</annotate>
+    <annotate key="org.freedesktop.policykit.exec.argv1">disable</annotate>
+  </action>
+
+  <!-- Open the Face Unlock settings app: always requires the user's password. -->
+  <action id="io.github.faceunlock.authenticate">
+    <description>Open Face Unlock</description>
+    <message>Authentication is required to open Face Unlock</message>
+    <defaults>
+      <allow_any>no</allow_any>
+      <allow_inactive>no</allow_inactive>
+      <allow_active>auth_self_keep</allow_active>
+    </defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">/usr/libexec/face-unlock/face-unlock-helper</annotate>
+    <annotate key="org.freedesktop.policykit.exec.argv1">authenticate</annotate>
+  </action>
+
+</policyconfig>

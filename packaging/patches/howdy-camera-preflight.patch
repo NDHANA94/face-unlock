@@ -1,0 +1,18 @@
+--- a/howdy/src/pam/main.cc
++++ b/howdy/src/pam/main.cc
+@@ -176,6 +176,15 @@
+     globfree(&glob_result);
+   }
+ 
++  // Setup may inherit an enabled PAM profile before a camera is configured.
++  // Skip silently so the next PAM module can ask for the password normally.
++  const auto device = config.GetString("video", "device_path", "none");
++  struct stat camera_stat;
++  if (device.empty() || device == "none" ||
++      stat(device.c_str(), &camera_stat) != 0 || !S_ISCHR(camera_stat.st_mode)) {
++    return PAM_AUTHINFO_UNAVAIL;
++  }
++
+   // pre-check if this user has face model file
+   auto model_path = std::string(USER_MODELS_DIR) + "/" + username + ".dat";
+   struct stat stat_;

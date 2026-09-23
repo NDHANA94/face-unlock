@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#3a3f58"/>
+      <stop offset="1" stop-color="#1e2233"/>
+    </linearGradient>
+    <linearGradient id="face" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#f6f5f4"/>
+      <stop offset="1" stop-color="#c0bfbc"/>
+    </linearGradient>
+  </defs>
+  <!-- base -->
+  <rect x="8" y="12" width="112" height="108" rx="20" fill="#14172a"/>
+  <rect x="8" y="8" width="112" height="108" rx="20" fill="url(#bg)"/>
+  <!-- scan corners -->
+  <g fill="none" stroke="#62a0ea" stroke-width="7" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M24 42V32a8 8 0 0 1 8-8h10"/>
+    <path d="M86 24h10a8 8 0 0 1 8 8v10"/>
+    <path d="M104 82v10a8 8 0 0 1-8 8H86"/>
+    <path d="M42 100H32a8 8 0 0 1-8-8V82"/>
+  </g>
+  <!-- face -->
+  <ellipse cx="64" cy="61" rx="24" ry="28" fill="url(#face)"/>
+  <g fill="#241f31">
+    <ellipse cx="55" cy="56" rx="3.5" ry="4.5"/>
+    <ellipse cx="73" cy="56" rx="3.5" ry="4.5"/>
+  </g>
+  <path d="M55 72q9 7 18 0" fill="none" stroke="#241f31" stroke-width="4" stroke-linecap="round"/>
+  <!-- infrared scan line -->
+  <rect x="30" y="60" width="68" height="4" rx="2" fill="#ed333b" opacity="0.85"/>
+</svg>
