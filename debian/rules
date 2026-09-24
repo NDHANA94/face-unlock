@@ -22,6 +22,7 @@ override_dh_auto_configure:
 	tar -xzf vendor/howdy-$(HOWDY_COMMIT).tar.gz -C debian/build
 	patch -d $(HOWDY) -p1 < packaging/patches/howdy-error-status.patch
 	patch -d $(HOWDY) -p1 < packaging/patches/howdy-camera-preflight.patch
+	patch -d $(HOWDY) -p1 < packaging/patches/howdy-auth-boundaries.patch
 	# The PAM module must start the engine through our wrapper so the bundled
 	# dlib is importable; meson itself keeps using the system python.
 	sed -i "s|^pam_module_conf_data = configuration_data(paths_dict)$$|&\npam_module_conf_data.set('python_path', '$(ENGINE)/bin/python3')|" \
@@ -41,6 +42,8 @@ override_dh_auto_configure:
 
 override_dh_auto_build:
 	meson compile -C $(HOWDY)/build
+	$(CC) $(CPPFLAGS) $(CFLAGS) -D_GNU_SOURCE -Wall -Wextra -Werror \
+		-o debian/build/check-password src/helper/check-password.c $(LDFLAGS) -lpam
 
 override_dh_auto_test:
 	PYTHONPATH=src python3 -m unittest discover -s tests -v
@@ -74,6 +77,8 @@ override_dh_auto_install:
 	install -m 644 src/face_unlock/*.py $(PKG)$(DATA)/face_unlock/
 	install -D -m 755 src/helper/face-unlock-helper $(PKG)/usr/libexec/face-unlock/face-unlock-helper
 	install -D -m 755 src/helper/python3 $(PKG)$(ENGINE)/bin/python3
+	install -D -m 755 debian/build/check-password $(PKG)/usr/libexec/face-unlock/check-password
+	install -D -m 644 data/pam-password $(PKG)/etc/pam.d/face-unlock-password
 	install -D -m 644 data/io.github.faceunlock.policy \
 		$(PKG)/usr/share/polkit-1/actions/io.github.faceunlock.policy
 	install -D -m 644 data/pam-config $(PKG)/usr/share/pam-configs/face-unlock

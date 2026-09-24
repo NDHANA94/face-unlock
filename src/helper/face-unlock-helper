@@ -10,7 +10,7 @@ who invoked pkexec (PKEXEC_UID) and never on an account named by the caller.
 Output is a single JSON object on stdout; the exit status is 0 on success.
 
 Commands:
-    authenticate          Verify the caller's password; succeeds when pkexec allowed it
+    authenticate          Verify the caller's password using a dedicated PAM service
     list                  List the caller's face models (no authentication)
     verify                Try to recognise the caller (no authentication)
     enroll LABEL          Scan the caller's face and store a new model
@@ -32,6 +32,7 @@ import tempfile
 
 ENGINE_DIR = "/usr/lib/face-unlock/howdy"
 ENGINE_PYTHON = "/usr/lib/face-unlock/bin/python3"
+PASSWORD_CHECKER = "/usr/libexec/face-unlock/check-password"
 CONFIG_FILE = os.environ.get("FACE_UNLOCK_CONFIG", "/etc/face-unlock/config.ini")
 MODELS_DIR = "/var/lib/face-unlock/models"
 PAM_PROFILE = "face-unlock"
@@ -179,11 +180,20 @@ def cmd_list(user, args):
 
 
 def cmd_authenticate(user, args):
-    """Confirm the caller is the account named by pkexec.
-
-    The polkit prompt has already proved they can authenticate as themselves;
-    this command exists solely to gate the GUI behind that check.
-    """
+    """Check a password for the invoking account without exposing it in argv."""
+    if args:
+        raise HelperError("usage: authenticate")
+    secret = bytearray(sys.stdin.buffer.readline(1025))
+    try:
+        if not secret.endswith(b"\n") or len(secret) < 2 or len(secret) > 1024:
+            raise HelperError("incorrect password")
+        result = subprocess.run([PASSWORD_CHECKER, user], input=secret,
+                                env=CLEAN_ENV, capture_output=True, timeout=15,
+                                check=False)
+    finally:
+        secret[:] = b"\0" * len(secret)
+    if result.returncode != 0:
+        raise HelperError("incorrect password")
     syslog.syslog(syslog.LOG_NOTICE, f"face-unlock GUI opened by {user}")
     return {"ok": True, "user": user}
 

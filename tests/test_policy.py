@@ -7,7 +7,8 @@ from pathlib import Path
 import unittest
 import xml.etree.ElementTree as ET
 
-POLICY = Path(__file__).resolve().parents[1] / 'data/io.github.faceunlock.policy'
+ROOT = Path(__file__).resolve().parents[1]
+POLICY = ROOT / 'data/io.github.faceunlock.policy'
 HELPER = '/usr/libexec/face-unlock/face-unlock-helper'
 PREFIX = 'org.freedesktop.policykit.exec.'
 
@@ -37,12 +38,19 @@ class PolicyTests(unittest.TestCase):
                 self.assertEqual(len(matches), 1)
                 self.assertEqual(matches[0].findtext('defaults/allow_active'), 'auth_admin_keep')
 
-    def test_app_launch_requires_user_authentication(self):
+    def test_app_launch_delegates_authentication_to_password_checker(self):
         matches = self.matches('authenticate')
         self.assertEqual(len(matches), 1)
-        self.assertEqual(matches[0].findtext('defaults/allow_active'), 'auth_self_keep')
+        self.assertEqual(matches[0].findtext('defaults/allow_active'), 'yes')
         self.assertEqual(matches[0].findtext('defaults/allow_inactive'), 'no')
         self.assertEqual(matches[0].findtext('defaults/allow_any'), 'no')
+
+    def test_password_service_uses_normal_pam_stack(self):
+        service = (ROOT / 'data/pam-password').read_text()
+        self.assertIn('@include common-auth', service)
+        self.assertIn('@include common-account', service)
+        profile = (ROOT / 'data/pam-config').read_text()
+        self.assertTrue(profile.startswith('Name: Face Unlock'))
 
     def test_unknown_commands_have_no_custom_grant(self):
         self.assertEqual(self.matches('unknown'), [])

@@ -136,7 +136,7 @@ def face_unlock_enabled():
 class Helper:
     """Runs face-unlock-helper through pkexec without blocking the UI."""
 
-    def run(self, args, callback):
+    def run(self, args, callback, input_text=None):
         """Call callback(result) with the helper's JSON result.
 
         On a dismissed password prompt the result is {"ok": False, "cancelled": True}.
@@ -144,12 +144,13 @@ class Helper:
         try:
             proc = Gio.Subprocess.new(
                 ([] if NO_PKEXEC else ["pkexec"]) + [HELPER, *args],
-                Gio.SubprocessFlags.STDOUT_PIPE | Gio.SubprocessFlags.STDERR_PIPE)
+                Gio.SubprocessFlags.STDOUT_PIPE | Gio.SubprocessFlags.STDERR_PIPE |
+                (Gio.SubprocessFlags.STDIN_PIPE if input_text is not None else 0))
         except GLib.Error as err:
             error = {"ok": False, "error": err.message}
             GLib.idle_add(lambda: callback(error) and False)
             return
-        proc.communicate_utf8_async(None, None, self._finish, callback)
+        proc.communicate_utf8_async(input_text, None, self._finish, callback)
 
     @staticmethod
     def _finish(proc, task, callback):

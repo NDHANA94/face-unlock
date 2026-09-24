@@ -30,15 +30,49 @@ class PreviewFrame(Gtk.Box):
         self.append(stack)
         self.append(self.status)
         self._camera = CameraPreview(self._on_frame, self._on_error)
-        self.connect("unrealize", lambda *_: self.stop())
+        self._wanted = False
+        self._device_path = None
+        self._root_window = None
+        self._root_handler = 0
+        self.connect("map", self._on_map)
+        self.connect("unmap", self._on_unmap)
 
     def start(self, device_path, is_ir=False):
         self._is_ir = is_ir
+        self._device_path = device_path
+        self._wanted = True
         self._stack.set_visible_child_name("placeholder")
         self.status.set_label(_("Starting camera…"))
-        self._camera.start(device_path)
+        self._resume()
+
+    def _on_map(self, *_args):
+        root = self.get_root()
+        if isinstance(root, Gtk.Window):
+            self._root_window = root
+            self._root_handler = root.connect("notify::is-active", self._on_root_active)
+        self._resume()
+
+    def _on_unmap(self, *_args):
+        if self._root_window is not None:
+            self._root_window.disconnect(self._root_handler)
+            self._root_window = None
+            self._root_handler = 0
+        self._camera.stop()
+
+    def _on_root_active(self, root, _pspec):
+        if root.is_active():
+            self._resume()
+        else:
+            self._camera.stop()
+
+    def _resume(self):
+        active = self._root_window is None or self._root_window.is_active()
+        if self._wanted and self.get_mapped() and active and not self._camera.running:
+            if not self._camera.start(self._device_path):
+                self.status.set_label(_("The camera is still stopping. Try again shortly."))
 
     def stop(self):
+        self._wanted = False
         self._camera.stop()
 
     def _on_frame(self, texture, lit_ratio):

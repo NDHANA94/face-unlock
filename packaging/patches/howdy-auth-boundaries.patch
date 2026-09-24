@@ -1,0 +1,91 @@
+--- a/howdy/src/pam/main.cc
++++ b/howdy/src/pam/main.cc
+@@ -15,6 +15,7 @@
+ #include <syslog.h>
+ #include <unistd.h>
+ 
++#include <algorithm>
+ #include <chrono>
+ #include <condition_variable>
+ #include <cstring>
+@@ -23,6 +24,7 @@
+ #include <future>
+ #include <mutex>
+ #include <string>
++#include <thread>
+ #include <tuple>
+ 
+ #include <INIReader.h>
+@@ -130,16 +132,24 @@
+  * @return        Returns PAM_AUTHINFO_UNAVAIL if it shouldn't be enabled,
+  * PAM_SUCCESS otherwise
+  */
+-auto check_enabled(const INIReader &config, const char *username) -> int {
++auto check_enabled(const INIReader &config, const char *username,
++                   const char *service) -> int {
++  // The settings app has its own password-only PAM service.
++  if (service && strcmp(service, "face-unlock-password") == 0) {
++    return PAM_AUTHINFO_UNAVAIL;
++  }
+   // Stop executing if Howdy has been disabled in the config
+   if (config.GetBoolean("core", "disabled", false)) {
+     syslog(LOG_INFO, "Skipped authentication, Howdy is disabled");
+     return PAM_AUTHINFO_UNAVAIL;
+   }
+ 
+-  // Stop if we're in a remote shell and configured to exit
++  // SSH session variables are set after PAM authentication. Use the PAM
++  // service name for sshd, retaining the environment checks for nested SSH.
+   if (config.GetBoolean("core", "abort_if_ssh", true)) {
+-    if (checkenv("SSH_CONNECTION") || checkenv("SSH_CLIENT") ||
++    if ((service && (strcmp(service, "sshd") == 0 ||
++                     strcmp(service, "sshd-session") == 0)) ||
++        checkenv("SSH_CONNECTION") || checkenv("SSH_CLIENT") ||
+         checkenv("SSH_TTY") || checkenv("SSHD_OPTS")) {
+       syslog(LOG_INFO, "Skipped authentication, SSH session detected");
+       return PAM_AUTHINFO_UNAVAIL;
+@@ -228,7 +238,13 @@
+   }
+ 
+   // Check if we should continue
+-  pam_res = check_enabled(config, username);
++  const void *service_item = nullptr;
++  pam_res = pam_get_item(pamh, PAM_SERVICE, &service_item);
++  if (pam_res != PAM_SUCCESS) {
++    return pam_res;
++  }
++  pam_res = check_enabled(config, username,
++                          static_cast<const char *>(service_item));
+   if (pam_res != PAM_SUCCESS) {
+     return pam_res;
+   }
+@@ -291,9 +307,27 @@
+ 
+   // This task wait for the status of the python subprocess (we don't want a
+   // zombie process)
++  const auto scan_seconds =
++      std::clamp(config.GetInteger("video", "timeout", 4L), 1L, 15L);
++  const auto deadline = std::chrono::steady_clock::now() +
++                        std::chrono::seconds(scan_seconds + 10);
+   optional_task<int> child_task([&] {
+-    int status;
+-    waitpid(child_pid, &status, 0);
++    int status = 1 << 8;  // Treat an unexpected waitpid error as failure.
++    while (true) {
++      const auto waited = waitpid(child_pid, &status, WNOHANG);
++      if (waited == child_pid) break;
++      if (waited == -1 && errno != EINTR) {
++        syslog(LOG_ERR, "Failed waiting for face engine: %s", strerror(errno));
++        break;
++      }
++      if (std::chrono::steady_clock::now() >= deadline) {
++        syslog(LOG_WARNING, "Face engine exceeded PAM deadline");
++        kill(child_pid, SIGKILL);
++        while (waitpid(child_pid, &status, 0) == -1 && errno == EINTR) {}
++        break;
++      }
++      std::this_thread::sleep_for(std::chrono::milliseconds(50));
++    }
+     {
+       std::unique_lock<std::mutex> lock(mutx);
+       if (confirmation_type == ConfirmationType::Unset) {

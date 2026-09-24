@@ -1,0 +1,37 @@
+name: Publish Debian release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Publish package
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          shopt -s nullglob
+          packages=(dist/face-unlock-ubuntu*-*-${version}.deb)
+          if (( ${#packages[@]} != 1 )); then
+            echo "Expected exactly one Debian package for ${version}; found ${#packages[@]}" >&2
+            exit 1
+          fi
+          package="${packages[0]}"
+          architecture="${package%-${version}.deb}"
+          architecture="${architecture##*-}"
+          test "$(dpkg-deb -f "$package" Package)" = face-unlock
+          test "$(dpkg-deb -f "$package" Version)" = "$version"
+          test "$(dpkg-deb -f "$package" Architecture)" = "$architecture"
+          gh release create "$GITHUB_REF_NAME" "$package" \
+            --verify-tag \
+            --title "Face Unlock ${version}" \
+            --notes "Debian package for Ubuntu. Includes security and power management fixes."

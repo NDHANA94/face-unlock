@@ -186,11 +186,12 @@ class Application(Adw.Application):
         # enrollments, model lists, and camera previews are not exposed to a
         # passer-by who happens to launch the app.
         if not self._authenticated:
-            self._authenticate()
-            # Keep the main loop alive while pkexec runs. Without an active
-            # window the loop would otherwise exit before the callback fires.
-            self.hold()
-            self._hold_count = 1
+            if not self._hold_count:
+                # Keep the main loop alive while the password dialog and
+                # privileged check are active without a main window.
+                self.hold()
+                self._hold_count = 1
+                self._authenticate()
             return
         if self.window is None:
             self.window = Window(self)
@@ -199,14 +200,36 @@ class Application(Adw.Application):
         self.window.present()
 
     def _authenticate(self):
-        """Ask polkit for the user's password before opening the main window."""
+        """Ask for a password and verify it with the dedicated PAM service."""
         # Development mode: allow running the GUI without a password prompt.
         if NO_PKEXEC:
             self._authenticated = True
+            self._release_hold()
             self.do_activate()
             return
-        helper = Helper()
-        helper.run(["authenticate"], self._on_authenticated)
+        entry = Gtk.PasswordEntry(show_peek_icon=True, hexpand=True)
+        dialog = Adw.AlertDialog(
+            heading=_("Unlock Face Unlock"),
+            body=_("Enter your account password to open face settings."))
+        dialog.set_extra_child(entry)
+        dialog.add_response("cancel", _("Cancel"))
+        dialog.add_response("open", _("Open"))
+        dialog.set_response_appearance("open", Adw.ResponseAppearance.SUGGESTED)
+        dialog.set_default_response("open")
+        dialog.set_close_response("cancel")
+        dialog.connect("response", self._on_password_response, entry)
+        dialog.present(None)
+
+    def _on_password_response(self, _dialog, response, entry):
+        if response != "open":
+            self._on_authenticated({"ok": False, "cancelled": True})
+            return
+        password = entry.get_text()
+        entry.set_text("")
+        if not password:
+            self._on_authenticated({"ok": False, "error": _("Enter your password.")})
+            return
+        Helper().run(["authenticate"], self._on_authenticated, input_text=password + "\n")
 
     def _release_hold(self):
         """Drop the main-loop hold acquired in do_activate."""

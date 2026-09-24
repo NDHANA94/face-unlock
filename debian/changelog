@@ -1,3 +1,12 @@
+face-unlock (1.2.3) resolute; urgency=high
+
+  * Skip face recognition during SSH and the settings password check.
+  * Bound PAM recognition time and prevent overlapping camera previews.
+  * Require an account password to open settings through a dedicated PAM service.
+  * Reduce preview work and pause capture while its view is hidden.
+
+ -- Nipun Dhananjaya <nipun.dhananjaya1994@gmail.com>  Thu, 24 Sep 2026 19:23:13 +0300
+
 face-unlock (1.2.2) resolute; urgency=medium
 
   * Quit cleanly when the user closes the main window, instead of leaving

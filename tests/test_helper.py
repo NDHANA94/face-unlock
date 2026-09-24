@@ -5,6 +5,7 @@
 """Tests for the privileged helper's validation and config editing."""
 
 import importlib.machinery
+import io
 import importlib.util
 import json
 import os
@@ -132,6 +133,27 @@ class CommandTests(unittest.TestCase):
         for p in patches:
             p.start()
             self.addCleanup(p.stop)
+
+    def test_authenticate_checks_password_for_calling_user(self):
+        seen = []
+        def check(_args, **kwargs):
+            seen.append((_args, bytes(kwargs["input"])))
+            return mock.Mock(returncode=0)
+        with mock.patch.object(helper.sys, "stdin", io.TextIOWrapper(io.BytesIO(b"secret\n"))), \
+                mock.patch.object(helper.subprocess, "run", side_effect=check):
+            self.assertTrue(helper.cmd_authenticate("alice", [])["ok"])
+        self.assertEqual(seen, [([helper.PASSWORD_CHECKER, "alice"], b"secret\n")])
+
+    def test_authenticate_rejects_wrong_or_missing_password(self):
+        with mock.patch.object(helper.sys, "stdin", io.TextIOWrapper(io.BytesIO(b"bad\n"))), \
+                mock.patch.object(helper.subprocess, "run", return_value=mock.Mock(returncode=1)):
+            with self.assertRaises(helper.HelperError):
+                helper.cmd_authenticate("alice", [])
+        with mock.patch.object(helper.sys, "stdin", io.TextIOWrapper(io.BytesIO(b""))), \
+                mock.patch.object(helper.subprocess, "run") as checker:
+            with self.assertRaises(helper.HelperError):
+                helper.cmd_authenticate("alice", [])
+            checker.assert_not_called()
 
     def test_configure_writes_whitelisted_settings(self):
         result = helper.cmd_configure("alice", ["video.certainty=2.8", "core.abort_if_ssh=false"])

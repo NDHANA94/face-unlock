@@ -111,8 +111,20 @@ class CameraSetupTests(unittest.TestCase):
         self.app._on_authenticated({'cancelled': True})
         self.assertEqual(self.app._hold_count, 0)
 
+    def test_password_is_sent_over_stdin(self):
+        from gi.repository import Gtk
+        from face_unlock import main
+        entry = Gtk.PasswordEntry()
+        entry.set_text('example-password')
+        with mock.patch.object(main, 'Helper') as helper:
+            self.app._on_password_response(None, 'open', entry)
+        helper.return_value.run.assert_called_once_with(
+            ['authenticate'], self.app._on_authenticated,
+            input_text='example-password\n')
+        self.assertEqual(entry.get_text(), '')
+
     def test_window_removed_quits_application(self):
-        # The app should exit cleanly when the user closes the only window.
+        # Exercise GTK's real window removal rather than passing a fake widget.
         with mock.patch.object(self.app, 'quit') as quit:
-            self.app.do_window_removed(mock.Mock())
+            self.window.destroy()
             quit.assert_called_once()

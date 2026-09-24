@@ -21,7 +21,7 @@ make deb
 ```
 
 The build verifies pinned vendor sources, compiles the engine and PAM module,
-runs helper tests, and produces `dist/face-unlock_1.1.1_amd64.deb`. The first build
+runs helper tests, and produces `dist/face-unlock-ubuntu26.04-amd64-1.2.3.deb`. The first build
 needs network access and can take several minutes. A cached dlib wheel must match
 the target Python version and architecture. `make deb-host` is also available
 when all build dependencies are installed on the host.
@@ -29,7 +29,7 @@ when all build dependencies are installed on the host.
 ## Install and set up
 
 ```sh
-sudo apt install ./dist/face-unlock_1.1.1_amd64.deb
+sudo apt install ./dist/face-unlock-ubuntu26.04-amd64-1.2.3.deb
 face-unlock
 ```
 
@@ -41,7 +41,9 @@ face-unlock
 Installation registers a disabled PAM profile. Successful initial enrollment
 requests activation. The Face Unlock switch controls activation system-wide;
 face models belong to individual users. Accounts without a model use passwords.
-An administrator password may be required to change settings or enroll faces.
+Opening the settings app asks for your account password and uses system PAM
+authentication with Face Unlock excluded, even when face unlock is enabled. An administrator password may also be required to change settings
+or enroll faces.
 
 To remove the app, run `sudo apt remove face-unlock`; the package removes its PAM
 profile first. `sudo apt purge face-unlock` also deletes settings and face models.
@@ -53,6 +55,7 @@ the packaged installation.
 Open the top-right menu and choose **Appearance → Light, Dark, or Follow system**.
 The app remembers your choice. Both themes use glass-style cards and an animated
 face guide. Animations pause when hidden and respect GTK's reduced-motion setting.
+Camera preview capture pauses when its view is hidden or the app loses focus.
 The scan graphic is decorative, not a face-tracking overlay or progress estimate.
 
 ## Development checks

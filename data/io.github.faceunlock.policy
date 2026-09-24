@@ -110,14 +110,14 @@
     <annotate key="org.freedesktop.policykit.exec.argv1">disable</annotate>
   </action>
 
-  <!-- Open the Face Unlock settings app: always requires the user's password. -->
+  <!-- The helper checks the password with a dedicated PAM service. -->
   <action id="io.github.faceunlock.authenticate">
     <description>Open Face Unlock</description>
-    <message>Authentication is required to open Face Unlock</message>
+    <message>Enter your password to open Face Unlock</message>
     <defaults>
       <allow_any>no</allow_any>
       <allow_inactive>no</allow_inactive>
-      <allow_active>auth_self_keep</allow_active>
+      <allow_active>yes</allow_active>
     </defaults>
     <annotate key="org.freedesktop.policykit.exec.path">/usr/libexec/face-unlock/face-unlock-helper</annotate>
     <annotate key="org.freedesktop.policykit.exec.argv1">authenticate</annotate>
